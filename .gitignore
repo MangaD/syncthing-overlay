@@ -1,0 +1,7 @@
+config.ini
+dist/
+build/
+*.spec
+*.exe
+syncthing-overlay.pfx
+cert_base64.txt

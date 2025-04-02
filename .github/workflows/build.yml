@@ -1,0 +1,83 @@
+name: Build Syncthing Overlay
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --name syncthing-overlay syncthing_overlay.py
+
+      - name: Sign executable
+        shell: pwsh
+        run: |
+          # Step 1: Decode the base64-encoded certificate stored in a secret
+          $pfxPath = "$env:RUNNER_TEMP\syncthing-overlay.pfx"
+          [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.CERT_PFX_BASE64 }}"))
+
+          # Step 2: Find signtool.exe (prefer 64-bit version from latest SDK)
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*x64*" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            Write-Error "signtool.exe not found!"
+            exit 1
+          }
+
+          # Step 3: Sign the executable
+          & $signtool sign `
+          /f syncthing-overlay.pfx `
+          /p "${{ secrets.CERT_PASSWORD }}" `
+          /tr http://timestamp.digicert.com `
+          /td sha256 `
+          /fd sha256 `
+          /v `
+          dist\syncthing-overlay.exe
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      # In the repository settings, go to Actions -> General -> Workflow permissions
+      # and enable Read and write permissions.
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/syncthing-overlay.exe
+          asset_name: syncthing-overlay-${{ github.ref_name }}.exe
+          asset_content_type: application/octet-stream

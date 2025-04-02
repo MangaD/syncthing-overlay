@@ -1,0 +1,4 @@
+requests
+pytz
+pystray
+pillow
