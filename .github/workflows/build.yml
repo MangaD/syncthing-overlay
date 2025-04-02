@@ -29,14 +29,25 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --name syncthing-overlay syncthing_overlay.py
+          pyinstaller -w --onefile --name syncthing-overlay src/syncthing_overlay.py
 
       - name: Sign executable
         shell: pwsh
         run: |
           # Step 1: Decode the base64-encoded certificate stored in a secret
           $pfxPath = "$env:RUNNER_TEMP\syncthing-overlay.pfx"
-          [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.CERT_PFX_BASE64 }}"))
+          try {
+            [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.CERT_PFX_BASE64 }}"))
+          } catch {
+            Write-Error "Failed to decode the base64-encoded certificate. Ensure the CERT_PFX_BASE64 secret is valid."
+            exit 1
+          }
+
+          # Validate the certificate file
+          if (-not (Test-Path $pfxPath)) {
+            Write-Error "Certificate file was not created successfully."
+            exit 1
+          }
 
           # Step 2: Find signtool.exe (prefer 64-bit version from latest SDK)
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
@@ -50,14 +61,19 @@ jobs:
           }
 
           # Step 3: Sign the executable
-          & $signtool sign `
-          /f syncthing-overlay.pfx `
-          /p "${{ secrets.CERT_PASSWORD }}" `
-          /tr http://timestamp.digicert.com `
-          /td sha256 `
-          /fd sha256 `
-          /v `
-          dist\syncthing-overlay.exe
+          try {
+            & $signtool sign `
+            /f $pfxPath `
+            /p "${{ secrets.CERT_PASSWORD }}" `
+            /tr http://timestamp.digicert.com `
+            /td sha256 `
+            /fd sha256 `
+            /v `
+            dist\syncthing-overlay.exe
+          } catch {
+            Write-Error "Signing the executable failed. Check the certificate password and signing tool configuration."
+            exit 1
+          }
 
       - name: Create Release
         id: create_release

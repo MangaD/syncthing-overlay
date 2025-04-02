@@ -1,7 +1,9 @@
+__pycache__/
 config.ini
 dist/
 build/
 *.spec
 *.exe
 syncthing-overlay.pfx
+syncthing-overlay.spec
 cert_base64.txt

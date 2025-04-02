@@ -38,14 +38,14 @@ Export-PfxCertificate -Cert $cert -FilePath "syncthing-overlay.pfx" -Password (C
 1. Go to your repository's `Settings > Secrets and variables > Actions`.
 2. Add the following secrets:
   - `CERT_PASSWORD`: The password you used when exporting the `.pfx` file.
-  - `CERT_FILE`: Base64-encoded content of the `.pfx` file.
+  - `CERT_PFX_BASE64`: Base64-encoded content of the `.pfx` file.
 
 To encode the `.pfx` file in Base64, run this command locally:
 
 ```powershell
 [Convert]::ToBase64String((Get-Content -Path "syncthing-overlay.pfx" -AsByteStream)) > cert_base64.txt
 ```
-Copy the content of cert_base64.txt and add it as the `CERT_FILE` secret.
+Copy the content of cert_base64.txt and add it as the `CERT_PFX_BASE64` secret.
 
 ### 3. Notes:
 
